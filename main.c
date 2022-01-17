@@ -170,7 +170,7 @@ void addRoundKey(__uint8_t s[], __uint32_t w[], int round){
 
 void printState(int round, char str[], __uint8_t stateMatrix[], int v){
     if (!v) return;
-    printf("round[%2d].%s\t", round, str);
+    printf("round[%2d].%s ", round, str);
     for (int row = 0; row < 4; row++){    
         for (int col = 0; col < Nb; col++){
             printf("%02x", stateMatrix[row + (Nb*col)]);
@@ -179,9 +179,9 @@ void printState(int round, char str[], __uint8_t stateMatrix[], int v){
     printf("\n");
 }
 
-void printKeySchedule(int round, char str[], __uint32_t w[], int v){
+void printKeySchedule(int round, int displayRound, char str[], __uint32_t w[], int v){
     if (!v) return;
-    printf("round[%2d].%s\t", round, str);
+    printf("round[%2d].%s ", displayRound, str);
     for (int i = round*Nb; i < (round+1)*Nb; i++){    
         printf("%08x", w[i]);
     }
@@ -189,35 +189,35 @@ void printKeySchedule(int round, char str[], __uint32_t w[], int v){
 }
 
 void cipher(__uint8_t stateMatrix[], __uint32_t w[]){
-    printState(0, "input ", stateMatrix, true);
+    printState(0, "input", stateMatrix, true);
     addRoundKey(stateMatrix, w, 0);
-    printKeySchedule(0, "k_sch ", w, VERBOSE);
+    printKeySchedule(0, 0, "k_sch", w, VERBOSE);
 
     for (int round = 1; round < Nr; round++){
-        printState(round, "start ", stateMatrix, VERBOSE);
+        printState(round, "start", stateMatrix, VERBOSE);
         subBytes(stateMatrix);
-        printState(round, "s_box ", stateMatrix, VERBOSE);
+        printState(round, "s_box", stateMatrix, VERBOSE);
         shiftRows(stateMatrix);
-        printState(round, "s_row ", stateMatrix, VERBOSE);
+        printState(round, "s_row", stateMatrix, VERBOSE);
         mixColumns(stateMatrix);
-        printState(round, "m_col ", stateMatrix, VERBOSE);
+        printState(round, "m_col", stateMatrix, VERBOSE);
         addRoundKey(stateMatrix, w, round);
-        printKeySchedule(round, "k_sch ", w, VERBOSE);
+        printKeySchedule(round, round, "k_sch", w, VERBOSE);
     }
-    printState(Nr, "start ", stateMatrix, VERBOSE);
+    printState(Nr, "start", stateMatrix, VERBOSE);
     subBytes(stateMatrix);
-    printState(Nr, "s_box ", stateMatrix, VERBOSE);
+    printState(Nr, "s_box", stateMatrix, VERBOSE);
     shiftRows(stateMatrix);
-    printState(Nr, "s_row ", stateMatrix, VERBOSE);
+    printState(Nr, "s_row", stateMatrix, VERBOSE);
     addRoundKey(stateMatrix, w, Nr);
-    printKeySchedule(Nr, "k_sch ", w, VERBOSE);
+    printKeySchedule(Nr, Nr, "k_sch", w, VERBOSE);
     printState(Nr, "output", stateMatrix, true);
 }
 
 void invCipher(__uint8_t stateMatrix[], __uint32_t w[]){
     printState(0, "iinput", stateMatrix, true);
     addRoundKey(stateMatrix, w, Nr);
-    printKeySchedule(Nr, "ik_sch", w, VERBOSE);
+    printKeySchedule(Nr, 0, "ik_sch", w, VERBOSE);
 
     for (int round = Nr-1; round > 0; round--){
         printState(Nr-round, "istart", stateMatrix, VERBOSE);
@@ -225,7 +225,7 @@ void invCipher(__uint8_t stateMatrix[], __uint32_t w[]){
         printState(Nr-round, "is_row", stateMatrix, VERBOSE);
         invSubBytes(stateMatrix);
         printState(Nr-round, "is_box", stateMatrix, VERBOSE);
-        printKeySchedule(Nr-round, "ik_sch", w, VERBOSE);
+        printKeySchedule(round, Nr-round, "ik_sch", w, VERBOSE);
         addRoundKey(stateMatrix, w, round);
         printState(Nr-round, "ik_add", stateMatrix, VERBOSE);
         invMixColumns(stateMatrix);
@@ -236,8 +236,8 @@ void invCipher(__uint8_t stateMatrix[], __uint32_t w[]){
     invSubBytes(stateMatrix);
     printState(Nr, "is_box", stateMatrix, VERBOSE);
     addRoundKey(stateMatrix, w, 0);
-    printKeySchedule(Nr, "ik_sch", w, VERBOSE);
-    printState(Nr, "output", stateMatrix, true);
+    printKeySchedule(0, Nr, "ik_sch", w, VERBOSE);
+    printState(Nr, "ioutput", stateMatrix, true);
 }
 
 void toHex(__uint8_t in[], __uint8_t out[], int len){
@@ -310,7 +310,7 @@ int main(int argc, char* argv[]){
     }
     unsigned int keysize = (unsigned int) strtol(argv[2], NULL, 10);
     if (!(keysize == 128 || keysize == 192 || keysize == 256)){
-        printf("usage: %s infile {128|192|256} keyfile [-v]\n", argv[0]);
+        printf("usage: %s infile {128|192|256} keyfile [-d]\n", argv[0]);
         exit(1);
     }
     Nk = keysize / 32;
@@ -324,7 +324,7 @@ int main(int argc, char* argv[]){
     toHex(str, beginState, 4 * Nb);
     transpose(beginState);
 
-    if (argc == 5 && strcmp("-v", argv[4]) == 0){
+    if (argc == 5 && strcmp("-d", argv[4]) == 0){
         VERBOSE = 1;
     }
 
@@ -335,7 +335,8 @@ int main(int argc, char* argv[]){
     
     keyExpansion(key, w);    
 
+    printf("CIPHER (ENCRYPT):\n");
     cipher(beginState, w);
-    printf("--------------------------------------------------------\n");
+    printf("\nINVERSE CIPHER (DECRYPT):\n");
     invCipher(beginState, w);
 }
