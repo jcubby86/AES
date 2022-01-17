@@ -41,6 +41,7 @@ const int Nb = 4;
 int Nk;
 int Nr;
 int VERBOSE = 0;
+int DECRYPT_ONLY = 0;
 int true = 1;
 
 __uint8_t sboxVal(__uint8_t in){
@@ -73,6 +74,10 @@ __uint32_t rotWord(__uint32_t in){
 __uint8_t xtime(__uint8_t in){
     __uint8_t a = in << 1;
     return a ^ ((in >> 7) * 0x1b);
+}
+
+__uint8_t ffAdd(__uint8_t a, __uint8_t b){
+    return a ^ b;
 }
 
 __uint8_t ffMultiply(__uint8_t a, __uint8_t b){
@@ -305,12 +310,12 @@ void transpose(__uint8_t s[]){
 
 int main(int argc, char* argv[]){
     if (argc < 4){
-        printf("usage: %s [-x] infile {128|192|256} keyfile\n", argv[0]);
+        printf("usage: %s infile {128|192|256} keyfile [-td]\n", argv[0]);
         exit(1);
     }
     unsigned int keysize = (unsigned int) strtol(argv[2], NULL, 10);
     if (!(keysize == 128 || keysize == 192 || keysize == 256)){
-        printf("usage: %s infile {128|192|256} keyfile [-d]\n", argv[0]);
+        printf("usage: %s infile {128|192|256} keyfile [-td]\n", argv[0]);
         exit(1);
     }
     Nk = keysize / 32;
@@ -324,8 +329,13 @@ int main(int argc, char* argv[]){
     toHex(str, beginState, 4 * Nb);
     transpose(beginState);
 
-    if (argc == 5 && strcmp("-d", argv[4]) == 0){
+    if (argc == 5 && strcmp("-t", argv[4]) == 0){
         VERBOSE = 1;
+    } else if (argc == 5 && strcmp("-d", argv[4]) == 0){
+        DECRYPT_ONLY = 1;
+    } else if (argc == 5 && (strcmp("-td", argv[4]) == 0 || strcmp("-dt", argv[4]) == 0)){
+        VERBOSE = 1;
+        DECRYPT_ONLY = 1;
     }
 
     __uint32_t w[Nb * (Nr + 1)];
@@ -335,8 +345,11 @@ int main(int argc, char* argv[]){
     
     keyExpansion(key, w);    
 
-    printf("CIPHER (ENCRYPT):\n");
-    cipher(beginState, w);
+    if (!DECRYPT_ONLY){
+        printf("CIPHER (ENCRYPT):\n");
+        cipher(beginState, w);
+    }
     printf("\nINVERSE CIPHER (DECRYPT):\n");
     invCipher(beginState, w);
+    
 }

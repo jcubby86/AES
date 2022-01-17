@@ -1,8 +1,8 @@
 #!/bin/bash
 
 function usage (){
-    printf "usage:\t./test.sh program {128|192|256|all} [-d]\n"
-    printf "\tuse the -d flag to compare against expected files from FIPS spec\n"
+    printf "usage:\t./test.sh program {128|192|256|all} [-t]\n"
+    printf "\tuse the -t flag to compare against expected files from FIPS spec\n"
     exit 0
 }
 
@@ -21,7 +21,7 @@ function run_test (){
     printf "\n"
     (./main $INPUT $TESTNUM $KEY $VERBOSE) >$ACTUAL
 
-    if [ "$VERBOSE" = "-d" ]; then
+    if [ "$VERBOSE" = "-t" ]; then
         (diff $OUTPUT $ACTUAL) >$DIFF
         if [ -s $DIFF ]; then
             printf "Test AES${TESTNUM} issues:\n"
@@ -45,8 +45,8 @@ fi
 
 VERBOSE=""
 if [ $# -eq 2 ]; then
-    if [ $2 = "-d" ]; then
-        VERBOSE="-d";
+    if [ $2 = "-t" ]; then
+        VERBOSE="-t";
     fi
 fi
 
