@@ -24,6 +24,26 @@ const int Nb = 4;
 int Nk;
 int Nr;
 
+__uint8_t sboxVal(__uint8_t in){
+	__uint8_t x = in >> 4;
+	__uint8_t y = in << 4;
+	y = y >> 4;
+	return sbox[(x * 16) + y];
+}
+
+__uint32_t word(__uint8_t a, __uint8_t b, __uint8_t c, __uint8_t d){
+    return (a << 24) | (b << 16) | (c << 8) | d;
+}
+
+__uint32_t subWord(__uint32_t in){
+    return word(sboxVal(in >> 24), sboxVal(in >> 16), sboxVal(in >> 8), sboxVal(in));
+}
+
+__uint32_t rotWord(__uint32_t in){
+    __uint8_t temp = in >> 24;
+    return (in << 8) | temp;
+}
+
 __uint8_t xtime(__uint8_t in){
     __uint8_t a = in << 1;
     return a ^ ((in >> 7) * 0x1b);
@@ -43,14 +63,6 @@ __uint8_t ffMultiply(__uint8_t a, __uint8_t b){
     return out;
 }
 
-
-__uint8_t sboxVal(__uint8_t in){
-	__uint8_t x = in >> 4;
-	__uint8_t y = in << 4;
-	y = y >> 4;
-	return sbox[(x * 16) + y];
-}
-
 void subBytes(__uint8_t stateMatrix[]){
 	for (int row = 0; row < 4; row++){
 		for (int col = 0; col < Nb; col++){
@@ -65,6 +77,18 @@ void shiftRows(__uint8_t stateMatrix[]){
 		__uint8_t temp[Nb];
 		for (int col = 0; col < Nb; col++){
 			int index = row + ((col + i) % Nb);
+			temp[col] = stateMatrix[index];
+		}
+		memcpy(&stateMatrix[row], temp, Nb);
+	}
+}
+
+void invShiftRows(__uint8_t stateMatrix[]){
+	for (int i = 1; i < 4; i++){
+		int row = i * Nb;
+		__uint8_t temp[Nb];
+		for (int col = 0; col < Nb; col++){
+			int index = row + ((col - i) % Nb);
 			temp[col] = stateMatrix[index];
 		}
 		memcpy(&stateMatrix[row], temp, Nb);
@@ -92,10 +116,15 @@ void mixColumns(__uint8_t stateMatrix[]){
 
 }
 
-void addRoundKey(__uint8_t stateMatrix[], __uint8_t key[], int round){
+void addRoundKey(__uint8_t s[], __uint32_t w[], int round){
     for (int c = 0; c < Nb; c++){
+        __uint32_t temp = w[(round*Nb)+c];
+        __uint32_t col = word(s[c], s[Nb  + c], s[(Nb*2)  + c], s[(Nb*3) + c]);
+        // printf("%08x + %08x = %08x\n", col, temp, col ^ temp);
+        col ^= temp;
+
         for (int r = 0; r < 4; r++){
-            stateMatrix[(r * Nb) + c] ^= key[(4 * (round * (Nb + c))) + r];
+            s[(r * Nb) + c] = *((__uint8_t*)(&col)+(3-r));
         }
     }
 }
@@ -110,20 +139,28 @@ void printState(__uint8_t stateMatrix[]){
     printf("\n");
 }
 
-void cipher(__uint8_t stateMatrix[], __uint8_t key[]){
+void cipher(__uint8_t stateMatrix[], __uint32_t w[]){
     printState(stateMatrix);
+    addRoundKey(stateMatrix, w, 0);
+    printState(stateMatrix);
+
+    for (int round = 1; round < Nr; round++){
+        subBytes(stateMatrix);
+        shiftRows(stateMatrix);
+        mixColumns(stateMatrix);
+        addRoundKey(stateMatrix, w, round);
+        printState(stateMatrix);
+    }
     subBytes(stateMatrix);
-	shiftRows(stateMatrix);
-	mixColumns(stateMatrix);
-    printState(stateMatrix);
-    addRoundKey(stateMatrix, key, 0);
+    shiftRows(stateMatrix);
+    addRoundKey(stateMatrix, w, Nr);
     printState(stateMatrix);
 }
 
 void toHex(__uint8_t in[], __uint8_t out[], int len){
     for (int i = 0; i < len; i++){
         __uint8_t hex[2];
-        memcpy(hex, &in[i*3], 2);
+        memcpy(hex, &in[i*2], 2);
         out[i] = (__uint8_t) strtol(hex, NULL, 16);
     }
 }
@@ -146,19 +183,6 @@ void readFile(__uint8_t str[], __uint8_t filename[]){
         exit(1);
     }
     fclose(fp);
-}
-
-__uint32_t word(__uint8_t a, __uint8_t b, __uint8_t c, __uint8_t d){
-    return (a << 24) | (b << 16) | (c << 8) | d;
-}
-
-__uint32_t subWord(__uint32_t in){
-    return word(sboxVal(in >> 24), sboxVal(in >> 16), sboxVal(in >> 8), sboxVal(in));
-}
-
-__uint32_t rotWord(__uint32_t in){
-    __uint8_t temp = in >> 24;
-    return (in << 8) | temp;
 }
 
 void keyExpansion(__uint8_t key[], __uint32_t w[]){
@@ -196,6 +220,16 @@ void keyExpansion(__uint8_t key[], __uint32_t w[]){
     }
 }
 
+void transpose(__uint8_t s[]){
+    __uint8_t t[4 * Nb];
+    for (int row = 0; row < 4; row++){    
+        for (int col = 0; col < Nb; col++){
+            t[(Nb*col) + row] = s[(Nb* row) + col];
+        }
+    }
+    memcpy(s, t, Nb*4);
+}
+
 int main(int argc, char* argv[]){
     if (argc < 4){
         printf("usage: %s [-x] infile {128|192|256} keyfile\n", argv[0]);
@@ -216,6 +250,7 @@ int main(int argc, char* argv[]){
 
     if (argc == 5){
         toHex(str, beginState, 4 * Nb);
+        transpose(beginState);
     } else {
         memcpy(beginState, str, 4 * Nb);
     }
@@ -224,18 +259,14 @@ int main(int argc, char* argv[]){
     __uint8_t key[keysize/8];
     readFile(str, argv[argc-1]);
     toHex(str, key, keysize/8);
-
-    //printState(key);
-
-    //__uint32_t temp = word(key[0], key[1], key[2], key[3]);
-
     
     keyExpansion(key, w);
 
     // for (int i = 0; i < Nb * (Nr + 1); i++){
     //     printf("%08x\n", w[i]);
     // }
+    // printf("\n");
     
 
-    //cipher(beginState, w);
+    cipher(beginState, w);
 }
